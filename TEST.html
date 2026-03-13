@@ -58,23 +58,33 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 
-        // --- CONFIGURATION FIREBASE (À remplacer pour votre propre hébergement) ---
-        const firebaseConfig = {
-  apiKey: "AIzaSyCKKmwo5RQo1xaLeR5IHq2qBTEEzlLtroo",
-  authDomain: "tcm-padel.firebaseapp.com",
-  projectId: "tcm-padel",
-  storageBucket: "tcm-padel.firebasestorage.app",
-  messagingSenderId: "1002668898979",
-  appId: "1:1002668898979:web:49b0051a5f47d4d480dd16",
-  measurementId: "G-00WS157FQN"
-};
+        // --- CONFIGURATION FIREBASE ---
+        const myFirebaseConfig = {
+            apiKey: "AIzaSyCKKmwo5RQo1xaLeR5IHq2qBTEEzlLtroo",
+            authDomain: "tcm-padel.firebaseapp.com",
+            projectId: "tcm-padel",
+            storageBucket: "tcm-padel.firebasestorage.app",
+            messagingSenderId: "1002668898979",
+            appId: "1:1002668898979:web:49b0051a5f47d4d480dd16",
+            measurementId: "G-00WS157FQN"
+        };
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : myFirebaseConfig;
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        const isEnvFirebase = typeof __firebase_config !== 'undefined';
+        const firebaseConfig = isEnvFirebase ? JSON.parse(__firebase_config) : myFirebaseConfig;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'padel-tour-pro-v1';
+
+        let app = null, auth = null, db = null, analytics = null;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            analytics = getAnalytics(app);
+        } catch (error) {
+            console.error("Erreur lors de l'initialisation de Firebase:", error);
+        }
 
         // --- ICONES SVGS ---
         const IconTrophy = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>;
@@ -1009,6 +1019,10 @@
             const [user, setUser] = useState(null);
 
             useEffect(() => {
+                if (!auth) {
+                    console.log("Mode local: Firebase n'est pas configuré. Le tournoi s'exécute en mémoire.");
+                    return; 
+                }
                 const initAuth = async () => {
                     try {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -1039,7 +1053,7 @@
             }]);
 
             useEffect(() => {
-                if (!user) return;
+                if (!user || !db) return;
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', 'main');
                 const unsub = onSnapshot(docRef, (snap) => {
                     if (snap.exists()) {
@@ -1052,7 +1066,7 @@
             const updateTournaments = (actionOrNextState) => {
                 setTournaments(prev => {
                     const next = typeof actionOrNextState === 'function' ? actionOrNextState(prev) : actionOrNextState;
-                    if (auth.currentUser) {
+                    if (auth && auth.currentUser && db) {
                         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', 'main');
                         setDoc(docRef, { list: next }).catch(console.error);
                     }
